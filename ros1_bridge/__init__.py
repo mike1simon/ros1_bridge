@@ -25,6 +25,7 @@ try:
 except ImportError:
     from io import StringIO  # Python 3.x
 
+
 import genmsg
 from genmsg.base import COMMENTCHAR, IODELIM
 import genmsg.msg_loader
@@ -264,7 +265,6 @@ def generate_services(rospack=None, message_string_pairs=None):
         'all_ros2_srvs': ros2_srvs,
     }
 
-
 def generate_actions(rospack=None, message_string_pairs=None):
     ros1_actions = get_ros1_actions(rospack)
     ros2_pkgs, ros2_actions, mapping_rules = get_ros2_actions()
@@ -294,18 +294,10 @@ def get_ros2_messages():
     msgs = []
     rules = []
     # get messages from packages
-    resources = {
-        key: (val, 'rosidl_interfaces') for key, val
-        in ament_index_python.get_resources('rosidl_interfaces').items()
-    }
-    resources.update({
-        key: (val, 'ros1_bridge_foreign_mapping') for key, val
-        in ament_index_python.get_resources('ros1_bridge_foreign_mapping').items()
-    })
-    for package_name, val_tuple in resources.items():
-        prefix_path, resource_type = val_tuple
-        if resource_type == 'rosidl_interfaces':  # Required, otherwise linking fails
-            pkgs.append(package_name)
+    resource_type = 'rosidl_interfaces'
+    resources = ament_index_python.get_resources(resource_type)
+    for package_name, prefix_path in resources.items():
+        pkgs.append(package_name)
         resource, _ = ament_index_python.get_resource(resource_type, package_name)
         interfaces = resource.splitlines()
         message_names = {
@@ -336,7 +328,7 @@ def get_ros2_messages():
                 if all(n not in data for n in ('ros1_service_name', 'ros2_service_name')):
                     try:
                         rules.append(MessageMappingRule(data, package_name))
-                    except Exception as e:  # noqa: B902
+                    except Exception as e:
                         print('%s' % str(e), file=sys.stderr)
     return pkgs, msgs, rules
 
@@ -356,19 +348,10 @@ def get_ros2_services():
     pkgs = []
     srvs = []
     rules = []
-    resources = {
-        key: (val, 'rosidl_interfaces') for key, val
-        in ament_index_python.get_resources('rosidl_interfaces').items()
-    }
-    resources.update({
-        key: (val, 'ros1_bridge_foreign_mapping') for key, val
-        in ament_index_python.get_resources('ros1_bridge_foreign_mapping').items()
-    })
     resource_type = 'rosidl_interfaces'
-    for package_name, val_tuple in resources.items():
-        prefix_path, resource_type = val_tuple
-        if resource_type == 'rosidl_interfaces':  # Required, otherwise linking fails
-            pkgs.append(package_name)
+    resources = ament_index_python.get_resources(resource_type)
+    for package_name, prefix_path in resources.items():
+        pkgs.append(package_name)
         resource, _ = ament_index_python.get_resource(resource_type, package_name)
         interfaces = resource.splitlines()
         service_names = {
@@ -399,10 +382,9 @@ def get_ros2_services():
                 if all(n not in data for n in ('ros1_message_name', 'ros2_message_name')):
                     try:
                         rules.append(ServiceMappingRule(data, package_name))
-                    except Exception as e:  # noqa: B902
+                    except Exception as e:
                         print('%s' % str(e), file=sys.stderr)
     return pkgs, srvs, rules
-
 
 # rosmsg.py
 def iterate_action_packages(rospack):
@@ -471,6 +453,7 @@ def get_ros2_actions():
     return pkgs, actions, rules
 
 
+
 class Message:
     __slots__ = [
         'package_name',
@@ -501,36 +484,25 @@ class MappingRule:
     __slots__ = [
         'ros1_package_name',
         'ros2_package_name',
-        'package_mapping',
-        'foreign_mapping'
+        'package_mapping'
     ]
 
     def __init__(self, data, expected_package_name):
         if all(n in data for n in ('ros1_package_name', 'ros2_package_name')):
-            if (data['ros2_package_name'] != expected_package_name
-                    and not data.get('enable_foreign_mappings')):
+            if data['ros2_package_name'] != expected_package_name:
                 raise Exception(
                     ('Ignoring rule which affects a different ROS 2 package (%s) '
-                     'then the one it is defined in (%s)\n\n'
-                     '(Please set `enable_foreign_mappings` to `true` if '
-                     'you explicitly want the rule to apply.)') %
-                    (data['ros2_package_name'], expected_package_name)
-                )
+                     'then the one it is defined in (%s)') %
+                    (data['ros2_package_name'], expected_package_name))
             self.ros1_package_name = data['ros1_package_name']
             self.ros2_package_name = data['ros2_package_name']
-            self.foreign_mapping = bool(data.get('enable_foreign_mappings'))
-            self.package_mapping = (
-                len(data) == (2 + int('enable_foreign_mappings' in data))
-            )
+            self.package_mapping = (len(data) == 2)
         else:
             raise Exception(
                 'Ignoring a rule without a ros1_package_name and/or ros2_package_name')
 
     def is_package_mapping(self):
         return self.package_mapping
-
-    def is_foreign_mapping(self):
-        return self.foreign_mapping
 
     def __repr__(self):
         return self.__str__()
@@ -551,18 +523,14 @@ class MessageMappingRule(MappingRule):
         if all(n in data for n in ('ros1_message_name', 'ros2_message_name')):
             self.ros1_message_name = data['ros1_message_name']
             self.ros2_message_name = data['ros2_message_name']
-            if 'fields_1_to_2' or 'fields_2_to_1' in data:
+            if 'fields_1_to_2' in data:
                 self.fields_1_to_2 = OrderedDict()
-                if 'fields_1_to_2' in data:
-                    for ros1_field_name, ros2_field_name in data['fields_1_to_2'].items():
-                        self.fields_1_to_2[ros1_field_name] = ros2_field_name
-                if 'fields_2_to_1' in data:
-                    for ros2_field_name, ros1_field_name in data['fields_2_to_1'].items():
-                        self.fields_1_to_2[ros1_field_name] = ros2_field_name
-            elif len(data) > 4 + int('enable_foreign_mappings' in data):
+                for ros1_field_name, ros2_field_name in data['fields_1_to_2'].items():
+                    self.fields_1_to_2[ros1_field_name] = ros2_field_name
+            elif len(data) > 4:
                 raise RuntimeError(
                     'Mapping for package %s contains unknown field(s)' % self.ros2_package_name)
-        elif len(data) > 2 + int('enable_foreign_mappings' in data):
+        elif len(data) > 2:
             raise RuntimeError(
                 'Mapping for package %s contains unknown field(s)' % self.ros2_package_name)
 
@@ -604,16 +572,15 @@ class ServiceMappingRule(MappingRule):
                 for ros1_field_name, ros2_field_name in data['response_fields_1_to_2'].items():
                     self.response_fields_1_to_2[ros1_field_name] = ros2_field_name
                 expected_keys += 1
-            elif len(data) > expected_keys + int('enable_foreign_mappings' in data):
+            elif len(data) > expected_keys:
                 raise RuntimeError(
                     'Mapping for package %s contains unknown field(s)' % self.ros2_package_name)
-        elif len(data) > 2 + int('enable_foreign_mappings' in data):
+        elif len(data) > 2:
             raise RuntimeError(
                 'Mapping for package %s contains unknown field(s)' % self.ros2_package_name)
 
     def __str__(self):
         return 'ServiceMappingRule(%s <-> %s)' % (self.ros1_package_name, self.ros2_package_name)
-
 
 class ActionMappingRule(MappingRule):
     __slots__ = [
@@ -830,7 +797,6 @@ def determine_common_services(
             })
     return services
 
-
 def determine_common_actions(
     ros1_actions, ros2_actions, mapping_rules, message_string_pairs=None
 ):
@@ -928,6 +894,7 @@ def determine_common_actions(
                 'fields': output
             })
     return actions
+
 
 
 def update_ros1_field_information(ros1_field, package_name):
@@ -1050,11 +1017,11 @@ def determine_field_mapping(ros1_msg, ros2_msg, mapping_rules, msg_idx):
                     file=sys.stderr)
                 continue
             mapping.add_field_pair(ros1_selected_fields, ros2_selected_fields)
+        return mapping
 
     # apply name based mapping of fields
     ros1_field_missing_in_ros2 = False
 
-    ros1_fields_not_mapped = []
     for ros1_field in ros1_spec.parsed_fields():
         for ros2_member in ros2_spec.structure.members:
             if ros1_field.name.lower() == ros2_member.name:
@@ -1062,17 +1029,9 @@ def determine_field_mapping(ros1_msg, ros2_msg, mapping_rules, msg_idx):
                 update_ros1_field_information(ros1_field, ros1_msg.package_name)
                 mapping.add_field_pair(ros1_field, ros2_member)
                 break
-
-        ros1_fields_mapped_to_a_ros2_member = [field[0].name
-                                               for field
-                                               in mapping.fields_1_to_2.keys()]
-        if ros1_field.name not in ros1_fields_mapped_to_a_ros2_member:
+        else:
             # this allows fields to exist in ROS 1 but not in ROS 2
-            ros1_fields_not_mapped += [ros1_field]
-
-    ros1_field_missing_in_ros2 = any(ros1_fields_not_mapped)
-
-    mapping.ros1_field_missing_in_ros2 = ros1_field_missing_in_ros2
+            ros1_field_missing_in_ros2 = True
 
     if ros1_field_missing_in_ros2:
         # if some fields exist in ROS 1 but not in ROS 2
@@ -1278,7 +1237,6 @@ def load_ros2_service(ros2_srv):
         return None
     return spec
 
-
 def load_ros2_action(ros2_action):
     action_path = os.path.join(
         ros2_action.prefix_path, 'share', ros2_action.package_name, 'action',
@@ -1292,8 +1250,6 @@ def load_ros2_action(ros2_action):
     return spec
 
 # make field types hashable
-
-
 def FieldHash(self):
     return self.name.__hash__()
 
@@ -1308,8 +1264,7 @@ class Mapping:
         'ros2_msg',
         'fields_1_to_2',
         'fields_2_to_1',
-        'depends_on_ros2_messages',
-        'ros1_field_missing_in_ros2',
+        'depends_on_ros2_messages'
     ]
 
     def __init__(self, ros1_msg, ros2_msg):
@@ -1318,7 +1273,6 @@ class Mapping:
         self.fields_1_to_2 = OrderedDict()
         self.fields_2_to_1 = OrderedDict()
         self.depends_on_ros2_messages = set()
-        self.ros1_field_missing_in_ros2 = False
 
     def add_field_pair(self, ros1_fields, ros2_members):
         """
@@ -1395,8 +1349,8 @@ class MessageIndex:
         """
         Get Message from ROS 2 index.
 
-        :type field: rosidl_parser.definition.NamespacedType
-        :return: the message indexed for the fields `type.namespaces[0]` and
-        `type.name` of `field`
+        :type field: rosidl_adapter.parser.Field
+        :return: the message indexed for the fields `type.pkg_name` and
+        `type.type` of `field`
         """
-        return self._ros2_idx[(field.type.namespaces[0], field.type.name)]
+        return self._ros2_idx[(field.type.pkg_name, field.type.type)]

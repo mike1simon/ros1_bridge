@@ -65,6 +65,7 @@ std::unique_ptr<ServiceFactoryInterface> get_service_factory(const std::string &
     return factory;
   }
 @[end for]@
+  // fprintf(stderr, "No template specialization for the service %s:%s/%s\n", ros_id.data(), package_name.data(), service_name.data());
   return factory;
 }
 

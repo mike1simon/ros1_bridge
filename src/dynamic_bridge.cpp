@@ -37,7 +37,9 @@
 
 // include ROS 2
 #include "rclcpp/rclcpp.hpp"
-#include "rcpputils/scope_exit.hpp"
+#include "rclcpp/scope_exit.hpp"
+
+#include "rcutils/get_env.h"
 
 #include "ros1_bridge/bridge.hpp"
 #include "ros1_bridge/action_factory.hpp"
@@ -122,6 +124,7 @@ bool parse_command_options(
     } else {
       printf("No action type conversion pairs supported.\n");
     }
+
     return false;
   }
 
@@ -344,10 +347,6 @@ void update_bridge(
     }
   }
 
-  int service_execution_timeout{5};
-  ros1_node.getParamCached(
-    "ros1_bridge/dynamic_bridge/service_execution_timeout", service_execution_timeout);
-
   // create bridges for ros2 services
   for (auto & service : ros2_services) {
     auto & name = service.first;
@@ -360,8 +359,7 @@ void update_bridge(
         "ros2", details.at("package"), details.at("name"));
       if (factory) {
         try {
-          service_bridges_1_to_2[name] = factory->service_bridge_1_to_2(
-            ros1_node, ros2_node, name, service_execution_timeout);
+          service_bridges_1_to_2[name] = factory->service_bridge_1_to_2(ros1_node, ros2_node, name);
           printf("Created 1 to 2 bridge for service %s\n", name.data());
         } catch (std::runtime_error & e) {
           fprintf(stderr, "Failed to created a bridge: %s\n", e.what());
@@ -475,6 +473,7 @@ void update_bridge(
       ++it;
     }
   }
+
 }
 
 void get_ros1_service_info(
@@ -495,12 +494,12 @@ void get_ros1_service_info(
     return;
   }
   ros::TransportTCPPtr transport(new ros::TransportTCP(nullptr, ros::TransportTCP::SYNCHRONOUS));
-  auto transport_exit = rcpputils::make_scope_exit(
+  auto transport_exit = rclcpp::make_scope_exit(
     [transport]() {
       transport->close();
     });
   if (!transport->connect(host, port)) {
-    fprintf(stderr, "Failed to connect to %s (%s:%d)\n", name.data(), host.data(), port);
+    fprintf(stderr, "Failed to connect to %s:%d\n", host.data(), port);
     return;
   }
   ros::M_string header_out;
@@ -785,6 +784,7 @@ int main(int argc, char * argv[])
   std::map<std::string, std::map<std::string, std::string>> ros1_action_clients;
   std::map<std::string, std::map<std::string, std::string>> ros2_action_servers;
   std::map<std::string, std::map<std::string, std::string>> ros2_action_clients;
+
   std::map<std::string, Bridge1to2HandlesAndMessageTypes> bridges_1to2;
   std::map<std::string, Bridge2to1HandlesAndMessageTypes> bridges_2to1;
   std::map<std::string, ros1_bridge::ServiceBridge1to2> service_bridges_1_to_2;
@@ -904,7 +904,6 @@ int main(int argc, char * argv[])
           }
         }
       }
-
       // check actions
       std::map<std::string, std::map<std::string, std::string>> active_ros1_action_servers,
         active_ros1_action_clients;
@@ -918,6 +917,7 @@ int main(int argc, char * argv[])
         ros1_action_servers = active_ros1_action_servers;
         ros1_action_clients = active_ros1_action_clients;
       }
+
 
       if (output_topic_introspection) {
         printf("\n");

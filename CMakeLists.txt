@@ -32,11 +32,11 @@ endif()
 
 find_ros1_package(roscpp)
 if(NOT ros1_roscpp_FOUND)
-  if(NOT ROS1_PACKAGES_UNAVAILABLE)
-    # Only warn if ROS1 packages were expected to be available
-    message(WARNING "Failed to find ROS 1 roscpp, skipping...")
-  endif()
-  # call ament_package() to avoid ament_tools treating this as a plain CMake pkg
+if(NOT ROS1_PACKAGES_UNAVAILABLE)
+# Only warn if ROS1 packages were expected to be available
+message(WARNING "Failed to find ROS 1 roscpp, skipping...")
+endif()
+# call ament_package() to avoid ament_tools treating this as a plain CMake pkg
   ament_package(
     CONFIG_EXTRAS ${cmake_extras_files}
   )
@@ -82,7 +82,7 @@ if(BUILD_TESTING)
     endif()
     set(TEST_ROS1_BRIDGE TRUE)
   endif()
-
+  
   find_package(ament_cmake_gtest REQUIRED)
   find_package(geometry_msgs REQUIRED)
   find_package(std_msgs REQUIRED)
@@ -167,12 +167,9 @@ set(target_dependencies
   "resource/pkg_factories.hpp.em"
   "ros1_bridge/__init__.py")
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
 add_custom_command(
   OUTPUT ${generated_files}
-  COMMAND Python3::Interpreter
-  ARGS bin/ros1_bridge_generate_factories
+  COMMAND ${PYTHON_EXECUTABLE} bin/ros1_bridge_generate_factories
     --output-path "${generated_path}" --template-dir resource
   DEPENDS ${target_dependencies}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
