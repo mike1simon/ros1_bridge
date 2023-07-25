@@ -33,9 +33,11 @@ int main(int argc, char * argv[])
   // must be before ROS1, because ros::init consumes args like __name and we cannot remap the node
   rclcpp::init(argc, argv);
   auto ros2_node = rclcpp::Node::make_shared("ros_bridge");
-
+  std::string node_name = ros2_node->get_name();
+  std::cout << "Initializing the action bridge node named: " << node_name << std::endl;
   // ROS 1 node
-  ros::init(argc, argv, "ros_bridge");
+  // ros::init(argc, argv, "ros_bridge");
+  ros::init(argc, argv, node_name);
   ros::NodeHandle ros1_node;
 
   std::string dir = argv[1];
